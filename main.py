@@ -186,8 +186,9 @@ def main(path,Swift_code_up):
 async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
     
     # Save the uploaded file temporarily
-    path = r'C:\Users\ISABIRYEDICKSON\Desktop\marvin trials\FastApi'
-    temp_file_path = os.path.join(path, 'temp_file.xlsx')
+    # path = r'C:\Users\ISABIRYEDICKSON\Desktop\marvin trials\FastApi'
+    # temp_file_path = os.path.join(path, 'temp_file.xlsx')
+    temp_file_path = "temp_file.xlsx"
     with open(temp_file_path, "wb") as buffer:
         buffer.write(file.file.read())
     
