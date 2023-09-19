@@ -4,12 +4,23 @@ import math
 import pyodbc
 from openpyxl.utils.dataframe import dataframe_to_rows
 from db_connect_aws import execute_query
-from batch_update_module import batch_update
-
+from db_update import batch_update
+from fastapi.middleware.cors import CORSMiddleware
+import json
 import os
 from fastapi import FastAPI, UploadFile, Form,File,HTTPException
 
 app = FastAPI()
+
+origins = [
+    "*"
+],
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 def backup_refs(df, reference_column):
     # Backup the original reference column
@@ -87,13 +98,11 @@ def process_reconciliation(dataframe, reconciliation_column, response_column, co
 
     # Separate reconciled and unreconciled rows based on conditions
     reconciled_data = dataframe[
-        (dataframe['Recon Status'] == 'Reconciled') &
-        (~dataframe[response_column].isna())
+        dataframe['Recon Status'] == 'Reconciled'
     ][columns_to_select]
 
     unreconciled_data = dataframe[
-        (dataframe['Recon Status'] == 'Unreconciled') &
-        (~dataframe[response_column].isna())
+        dataframe['Recon Status'] == 'Unreconciled'
     ][columns_to_select]
 
     # Rows that are reconciled but have a non-zero RESPONSE CODE
@@ -121,8 +130,11 @@ def main(path,Swift_code_up):
 
     # Now, you can use strftime to format the 'Date' column
     min_date, max_date = date_range(uploaded_df, 'Date')
-    uploaded_df = backup_refs(uploaded_df, 'ABC Reference')
 
+    date_range_str = f"{min_date},{max_date}"
+
+    uploaded_df = backup_refs(uploaded_df, 'ABC Reference')
+    UploadedRows = len(uploaded_df)
     # Clean and format columns in the uploaded dataset
     # Apply the data_pre_processing function to the uploaded_df dataframe
     up_preprocessing_result = pre_processing(uploaded_df)
@@ -142,6 +154,7 @@ def main(path,Swift_code_up):
     
     if datadump is not None:
         datadump = backup_refs(datadump, 'TRN_REF')
+        requestedRows = len(datadump)
         # Clean and format columns in the datadump        
         # Apply the data_pre_processing function to the datadump dataframe
         db_preprocessing_result = pre_processing(datadump)
@@ -149,7 +162,7 @@ def main(path,Swift_code_up):
         # Now, you can use strftime to format the 'DATE_TIME' column if needed
         
         # Merge and analyze data
-        merged_df = uploaded_df.merge(datadump, left_on='concat_up', right_on='concat_db', how='outer')
+        merged_df = datadump.merge(uploaded_df, left_on='concat_db', right_on='concat_up', how='outer')
 
         # Create a new column 'Recon Status'
         merged_df['Recon Status'] = 'Unreconciled'
@@ -157,30 +170,26 @@ def main(path,Swift_code_up):
 
         # Define columns to select for the separated dataframes
         columns_to_select = ['Date','Original_ABC Reference', 'ABC Reference', 'Amount', 'Transaction type','Original_TRN_REF', 'TRN_REF', 'DATE_TIME', 'TXN_TYPE', 'ISSUER_CODE', 'ACQUIRER_CODE', 'RESPONSE_CODE','Recon Status']
-        reconciled_data, unreconciled_data, exceptions = process_reconciliation(merged_df, 'concat_db', 'RESPONSE_CODE', columns_to_select)
+        reconciled_data, unreconciled_data, exceptions = process_reconciliation(merged_df, 'Recon Status', 'RESPONSE_CODE', columns_to_select)
         
         # The batch_update, feedback on update functions!
         dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
-        feedback, updated_rows = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
+        feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)  
 
-        expected_rowcount = len(reconciled_data)
-        if updated_rows == expected_rowcount:
-            print("Update was successful!")
-        else:
-            print("Update failed or didn't affect the expected number of rows.")        
-
-        #Log errors and relevant information using the Python logging module
+        # Log errors and relevant information using the Python logging module
         import logging
 
         logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
         try:
-            print('Thank you, your reconciliation is complete' )
+            #print (expected_rowcount)
+            #print (updated_rows)
+            print('Thank you, your reconciliation is complete. ' + feedback)
+            
             pass
         except Exception as e:
             logging.error(f"Error: {str(e)}")
 
-
-        return merged_df,reconciled_data,unreconciled_data,exceptions,feedback
+        return merged_df,reconciled_data,unreconciled_data,exceptions,feedback,requestedRows,UploadedRows,date_range_str
 
 @app.post("/reconcile")
 async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
@@ -194,19 +203,27 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
     
     try:
         # Call the main function with the path of the saved file and the swift code
-        merged_df, reconciled_data, unreconciled_data, exceptions,feedback = main(temp_file_path, swift_code)
-        
+        merged_df, reconciled_data, unreconciled_data, exceptions,feedback,requestedRows,UploadedRows,date_range_str= main(temp_file_path, swift_code)
+        reconciledRows = len(reconciled_data)
+        unreconciledRows = len(unreconciled_data)
+        exceptionsRows = len(exceptions)
         # Clean up: remove the temporary file after processing
         os.remove(temp_file_path)
         
-        return {
+        data =  {
            
-            "merged_df": merged_df.to_dict(),
-            "reconciled_data": reconciled_data.to_dict(),
-            "unreconciled_data": unreconciled_data.to_dict(),
-            "exceptions": exceptions.to_dict(),
-            "feedback": feedback
+            "reconciledRows": reconciledRows,
+            "unreconciledRows": unreconciledRows,
+            "exceptionsRows": exceptionsRows,
+            "feedback": feedback,
+            "RequestedRows":requestedRows,
+            "UploadedRows":UploadedRows,
+            "min_max_DateRange":date_range_str
         }
+
+        json_data = json.dumps(data,indent=4)
+        return json_data
+    
     except Exception as e:
         # If there's an error during the process, ensure the temp file is removed
         if os.path.exists(temp_file_path):
@@ -214,8 +231,6 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
         
         # Raise a more specific error to FastAPI to handle
         raise HTTPException(status_code=500, detail=str(e))
-
-
   
 if __name__ == "__main__":
     import uvicorn

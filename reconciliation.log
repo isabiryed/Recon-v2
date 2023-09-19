@@ -1,0 +1,6 @@
+2023-09-13 22:21:04,784 - ERROR: An error occurred in the main process: time data "2023-08-10 16:37:21" doesn't match format "%d%m%Y", at position 0. You might want to try:
+    - passing `format` if your strings have a consistent format;
+    - passing `format='ISO8601'` if your strings are all ISO8601 but not necessarily in exactly the same format;
+    - passing `format='mixed'`, and the format will be inferred for each element individually. You might want to use `dayfirst` alongside this.
+ERROR:root:Error: can only concatenate str (not "numpy.int64") to str
+ERROR:root:Error: can only concatenate str (not "numpy.int64") to str

@@ -5,10 +5,7 @@ def execute_query(server_name, database_name, username, password, query, query_t
     conn = None  # Initialize conn to None
     try:
         # Define the connection string
-        if server_name.lower() == "ISABIRYEDICKSON":
-            connection_string = f"Driver={{SQL Server}};Server={server_name};Database={database_name};Trusted_Connection=yes;"
-        else:
-            connection_string = f"Driver={{SQL Server}};Server={server_name};Database={database_name};UID={username};PWD={password};TrustServerCertificate=yes;"
+        connection_string = f"Driver={{SQL Server}};Server={server_name};Database={database_name};UID={username};PWD={password};TrustServerCertificate=yes;"
 
         # Connect to the database
         conn = pyodbc.connect(connection_string)
@@ -42,7 +39,7 @@ if __name__ == "__main__":
     password = "Tech247w247"
 
     # Test the connection
-    test_query = "SELECT DATE_TIME, TRN_REF, TXN_TYPE, ISSUER_CODE, ACQUIRER_CODE,AMOUNT, RESPONSE_CODE FROM Transactions"  # A simple query to test the connection
+    test_query = "SELECT TOP 2 DATE_TIME, TRN_REF, TXN_TYPE FROM Transactions"  # A simple query to test the connection
     result_df = execute_query(server, database, username, password, test_query)
 
     if result_df is not None:
