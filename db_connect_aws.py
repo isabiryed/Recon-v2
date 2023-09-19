@@ -17,12 +17,12 @@ def execute_query(server_name, database_name, username, password, query, query_t
             # Fetch data directly into a DataFrame with column names
             df = pd.DataFrame.from_records(cursor.fetchall(), columns=[column[0] for column in cursor.description])
             return df
-        elif query_type == "UPDATE":
+        elif query_type in ["UPDATE", "INSERT"]:
             cursor.execute(query)
             conn.commit()  # Commit the changes to the database
-            return None  # For update queries, return None
+            return None  # For update and Insert queries, return None
         else:
-            raise ValueError("Invalid query type. Supported types are 'SELECT' and 'UPDATE'.")
+            raise ValueError("Invalid query type. Supported types are 'SELECT','UPDATE'and 'INSERT'.")
 
     except Exception as e:
         print(f"Error: {str(e)}")

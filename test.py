@@ -8,34 +8,26 @@ from db_update import batch_update
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
-from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
-from db_reconcile import insert_recon_stats,recon_stats_req
-from db_exceptions import select_exceptions
-
+from fastapi import FastAPI, UploadFile, Form,File,HTTPException
 # Log errors and relevant information using the Python logging module
 import logging
 
 app = FastAPI()
 
-origins = [
-    "*"
-],
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+# origins = [
+#     "*"
+# ],
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_methods=["*"],
+#     allow_headers=["*"]
+# )
 
 server = 'businessintelligence.cqo7jevz1qxm.eu-north-1.rds.amazonaws.com,1433'
 database = 'BusinessIntelligence'
 username = "isabiryed"
 password = "Tech247w247"
-
-# Example usage for SELECT query:   
-# connection_string = execute_query(server, database, username, password)
-queryTst = "SELECT 1"
-connection_string = execute_query(server, database, username, password,queryTst)
 
 def backup_refs(df, reference_column):
     # Backup the original reference column
@@ -106,6 +98,30 @@ def pre_processing(df):
     
     return df
 
+#     return reconciled_data, unreconciled_data, exceptions
+def insert_reconciliation(reconciledRows, unreconciledRows, exceptionsRows, feedback, requestedRows, UploadedRows, date_range_str, server, database, username, password):
+    # Define the SQL query for insertion
+    insert_query = f"""
+        INSERT INTO Reconciliation
+        (RECON_RWS, UNRECON_RWS, EXCEP_RWS, FEEDBACK, RQ_RWS, UPLD_RWS, RQ_DATE_RANGE)
+        VALUES
+        ({reconciledRows}, {unreconciledRows}, {exceptionsRows}, '{feedback}', {requestedRows}, {UploadedRows}, '{date_range_str}')
+    """
+    
+    # Execute the SQL query
+    execute_query(server, database, username, password, insert_query, query_type="INSERT")
+
+def select_reconciliation_data(server, database, username, password,swift_code):
+    # Define the SQL query for selection
+    select_query = f"""
+            SELECT RQ_RWS, RQ_DATE_RANGE, UPLD_RWS, EXCEP_RWS, RECON_RWS, UNRECON_RWS, FEEDBACK 
+            FROM Reconciliation WHERE BANK_ID = '{swift_code}'
+        """    
+    # Execute the SQL query and retrieve the results
+    recon_results_df = execute_query(server, database, username, password, select_query, query_type="SELECT")
+    
+    return recon_results_df
+
 def process_reconciliation(dataframe, response_column, columns_to_select, additional_check_column=None):
     # Create a new 'Recon Status' column
     dataframe['Recon Status'] = 'Unreconciled'
@@ -134,7 +150,13 @@ def process_reconciliation(dataframe, response_column, columns_to_select, additi
     return reconciled_data, unreconciled_data, exceptions
 
 def main(path,Swift_code_up):
+    # Example usage for SELECT query:
     
+    
+    # connection_string = execute_query(server, database, username, password)
+    queryTst = "SELECT 1"
+    connection_string = execute_query(server, database, username, password,queryTst)
+
     # Read the uploaded dataset from Excel
     uploaded_df = pd.read_excel(path , usecols = [0, 1, 2, 3], skiprows = 0)
 
@@ -172,26 +194,38 @@ def main(path,Swift_code_up):
         # Now, you can use strftime to format the 'DATE_TIME' column if needed
         
         # Merge and analyze data
-        merged_df = datadump.merge(uploaded_df, left_on = 'concat_db', right_on = 'concat_up', how = 'outer')  
+        merged_df = datadump.merge(uploaded_df, left_on='concat_db', right_on='concat_up', how='outer')  
         
         # Define columns to select for the separated dataframes
-        columns_to_select = ['Date','Original_ABC Reference', 'ABC Reference', 'Amount', 'Transaction type','Original_TRN_REF',
-                              'TRN_REF', 'DATE_TIME', 'TXN_TYPE', 'ISSUER_CODE', 'ACQUIRER_CODE', 'RESPONSE_CODE','Recon Status']
+        columns_to_select = ['Date','Original_ABC Reference', 'ABC Reference', 'Amount', 'Transaction type','Original_TRN_REF', 'TRN_REF', 'DATE_TIME', 'TXN_TYPE', 'ISSUER_CODE', 'ACQUIRER_CODE', 'RESPONSE_CODE','Recon Status']
         
         reconciled_data, unreconciled_data, exceptions = process_reconciliation(
-                dataframe = merged_df,response_column = 'RESPONSE_CODE',columns_to_select = columns_to_select,additional_check_column = 'TRN_REF')
+                dataframe=merged_df,
+                response_column='RESPONSE_CODE',
+                columns_to_select=columns_to_select,
+                additional_check_column='TRN_REF'
+            )
         
         # The batch_update, feedback on update functions!
         dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
-        feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,
-                                                    username, password, execute_query)  
+        feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)  
         
-        insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(unreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
-           date_range_str,server,database,username,password) 
+        insert_reconciliation(
+           len(reconciled_data),
+           len(unreconciled_data),
+           len(exceptions),
+           feedback,
+           (requestedRows),
+           (UploadedRows),
+           date_range_str,
+           server,database,username,password
+           )  
+        
 
         logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
         try:
-            
+            #print (expected_rowcount)
+            #print (updated_rows)
             print('Thank you, your reconciliation is complete. ' + feedback)
             
             pass
@@ -204,14 +238,15 @@ def main(path,Swift_code_up):
 async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
     
     # Save the uploaded file temporarily
-    
+    # path = r'C:\Users\ISABIRYEDICKSON\Desktop\marvin trials\FastApi'
+    # temp_file_path = os.path.join(path, 'temp_file.xlsx')
     temp_file_path = "temp_file.xlsx"
     with open(temp_file_path, "wb") as buffer:
         buffer.write(file.file.read())
     
     try:
         # Call the main function with the path of the saved file and the swift code
-        merged_df, reconciled_data, unreconciled_data, exceptions,feedback,requestedRows,UploadedRows,date_range_str = main(temp_file_path, swift_code)
+        merged_df, reconciled_data, unreconciled_data, exceptions,feedback,requestedRows,UploadedRows,date_range_str= main(temp_file_path, swift_code)
         reconciledRows = len(reconciled_data)
         unreconciledRows = len(unreconciled_data)
         exceptionsRows = len(exceptions)
@@ -229,7 +264,7 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
             "min_max_DateRange":date_range_str
         }
 
-        json_data = json.dumps(data,indent = 4)
+        json_data = json.dumps(data,indent=4)
         return json_data
     
     except Exception as e:
@@ -238,24 +273,23 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
             os.remove(temp_file_path)
         
         # Raise a more specific error to FastAPI to handle
-        raise HTTPException(status_code = 500, detail = str(e))  
+        raise HTTPException(status_code=500, detail=str(e))
+  
+
+# @app.get("/ReconStats")
+# async def getReconStats():
+data = select_reconciliation_data(server,database,username,password,130447)
+print(data)
+# result = json.dumps(data)
+#     return  data
+
+# @app.get("/Exceptions")
+# async def getExceptions():
+#     data = select_reconciliation_data(server,database,username,password)
+#     result = json.dumps(data)
+#     return  result
 
 
-@app.get("/ReconStats")
-async def getReconStats(Swift_code_up: str):
-    data = recon_stats_req(server,database,username,password,Swift_code_up)
-    df = pd.DataFrame(data)
-    return df
-
-@app.get("/Exceptions")
-async def getExceptions(Swift_code_up: str):
-    data = select_exceptions(server,database,username,password,Swift_code_up)
-    df = pd.DataFrame(data)
-    
-    return df
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host = "0.0.0.0", port = 8000)
-
-    
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(app, host="0.0.0.0", port=8000)
