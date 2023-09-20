@@ -40,12 +40,13 @@ def batch_update(df, Swift_code_up, min_date, max_date, server, database, userna
         
         # Generate the count query
         count_query = f'''
-            SELECT COUNT(*) 
-            FROM Transactions
-            WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
-                AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
-                AND (ISS_FLG = 1 OR ACQ_FLG = 1)
-                AND TRN_REF IN ({trn_refs_str})
+            SELECT COUNT(DISTINCT TRN_REF)
+                FROM Transactions
+                WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
+                    AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
+                    AND (ISS_FLG = 1 OR ACQ_FLG = 1)
+                    AND TRN_REF IN ({trn_refs_str})
+
         '''
         
         # count_result = execute_query_func(server, database, username, password, count_query, query_type="SELECT")

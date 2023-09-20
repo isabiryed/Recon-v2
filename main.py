@@ -43,16 +43,6 @@ def backup_refs(df, reference_column):
     
     return df
 
-def concat_column(dataframe, base_name, date_column, reference_column, amount_column):
-    # Create a concatenated column with the format: concat_<base_name>
-    column_name = f'concat_{base_name}'
-    dataframe[column_name] = (
-        dataframe[date_column].astype(str) +
-        dataframe[reference_column].astype(str) +
-        dataframe[amount_column].astype(str)
-    )
-    return dataframe
-
 def date_range(dataframe, date_column):
     min_date = dataframe[date_column].min().strftime('%Y-%m-%d')
     max_date = dataframe[date_column].max().strftime('%Y-%m-%d')
@@ -106,33 +96,31 @@ def pre_processing(df):
     
     return df
 
-def process_reconciliation(dataframe, response_column, columns_to_select, additional_check_column=None):
-    # Create a new 'Recon Status' column
-    dataframe['Recon Status'] = 'Unreconciled'
+def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
     
-    # Check the specified columns for non-NaN values
-    if additional_check_column:
-        dataframe.loc[(dataframe['Recon Status'].notna()) & (dataframe[additional_check_column].notna()), 'Recon Status'] = 'Reconciled'
-    else:
-        dataframe.loc[dataframe['Recon Status'].notna(), 'Recon Status'] = 'Reconciled'
-
-    # Separate reconciled and unreconciled rows based on conditions
-    reconciled_data = dataframe[
-        (dataframe['Recon Status'] == 'Reconciled')
-    ][columns_to_select]
+    # Rename columns of DF1 to match DF2 for easier merging
+    DF1 = DF1.rename(columns={
+        'Date': 'DATE_TIME',
+        'ABC Reference': 'TRN_REF',
+        'Amount': 'AMOUNT',
+        'Transaction type': 'TXN_TYPE'
+    })
     
-    unreconciled_data = dataframe[
-        dataframe['Recon Status'] == 'Unreconciled'
-    ][columns_to_select]
+    # Merge the dataframes on the relevant columns
+    merged_df = DF1.merge(DF2, on=['DATE_TIME', 'TRN_REF', 'AMOUNT'], how='outer', indicator=True)
+    
+    # Create a new column 'Recon Status'
+    merged_df['Recon Status'] = 'Unreconciled'
+    merged_df.loc[merged_df['_merge'] == 'both', 'Recon Status'] = 'Reconciled'
 
-    # Rows that are reconciled but have a non-zero RESPONSE CODE
-    exceptions = dataframe[
-        (dataframe['Recon Status'] == 'Reconciled') &
-        (dataframe[response_column] != '0')
-    ][columns_to_select]
+    # Separate the data into three different dataframes based on the reconciliation status
+    reconciled_data = merged_df[merged_df['Recon Status'] == 'Reconciled']
+    unreconciled_data = merged_df[merged_df['Recon Status'] == 'Unreconciled']
+    exceptions = merged_df[(merged_df['Recon Status'] == 'Reconciled') & (merged_df['RESPONSE_CODE'] != '0')]
 
-    return reconciled_data, unreconciled_data, exceptions
+    return merged_df, reconciled_data, unreconciled_data, exceptions
 
+    
 def main(path,Swift_code_up):
     
     # Read the uploaded dataset from Excel
@@ -147,12 +135,11 @@ def main(path,Swift_code_up):
     UploadedRows = len(uploaded_df)
     # Clean and format columns in the uploaded dataset
     # Apply the data_pre_processing function to the uploaded_df dataframe
-    up_preprocessing_result = pre_processing(uploaded_df)
-    uploaded_df = concat_column(up_preprocessing_result,'up', 'Date', 'ABC Reference', 'Amount')
-    
+    uploaded_df_processed = pre_processing(uploaded_df)
+        
     # Define the SQL query
     query = f"""
-        SELECT DATE_TIME, TRN_REF, TXN_TYPE, ISSUER_CODE, ACQUIRER_CODE,
+        SELECT DISTINCT DATE_TIME, TRN_REF, TXN_TYPE, ISSUER_CODE, ACQUIRER_CODE,
                AMOUNT, RESPONSE_CODE
         FROM Transactions
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
@@ -167,20 +154,12 @@ def main(path,Swift_code_up):
         requestedRows = len(datadump)
         # Clean and format columns in the datadump        
         # Apply the data_pre_processing function to the datadump dataframe
-        db_preprocessing_result = pre_processing(datadump)
-        datadump = concat_column(db_preprocessing_result,'db', 'DATE_TIME', 'TRN_REF', 'AMOUNT')
-        # Now, you can use strftime to format the 'DATE_TIME' column if needed
+        db_preprocessed = pre_processing(datadump)
         
-        # Merge and analyze data
-        merged_df = datadump.merge(uploaded_df, left_on = 'concat_db', right_on = 'concat_up', how = 'outer')  
-        
-        # Define columns to select for the separated dataframes
-        columns_to_select = ['Date','Original_ABC Reference', 'ABC Reference', 'Amount', 'Transaction type','Original_TRN_REF',
-                              'TRN_REF', 'DATE_TIME', 'TXN_TYPE', 'ISSUER_CODE', 'ACQUIRER_CODE', 'RESPONSE_CODE','Recon Status']
-        
-        reconciled_data, unreconciled_data, exceptions = process_reconciliation(
-                dataframe = merged_df,response_column = 'RESPONSE_CODE',columns_to_select = columns_to_select,additional_check_column = 'TRN_REF')
-        
+        # Now, you can use strftime to format the 'DATE_TIME' column if needed        
+                
+        merged_df, reconciled_data, unreconciled_data, exceptions = process_reconciliation(uploaded_df_processed,db_preprocessed)  
+                
         # The batch_update, feedback on update functions!
         dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
         feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,
@@ -240,19 +219,20 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
         # Raise a more specific error to FastAPI to handle
         raise HTTPException(status_code = 500, detail = str(e))  
 
-
 @app.get("/ReconStats")
 async def getReconStats(Swift_code_up: str):
-    data = recon_stats_req(server,database,username,password,Swift_code_up)
+    data = recon_stats_req(server, database, username, password, Swift_code_up)
     df = pd.DataFrame(data)
-    return df
+    # Convert DataFrame to a list of dictionaries for JSON serialization
+    return df.to_dict(orient='records')
 
 @app.get("/Exceptions")
 async def getExceptions(Swift_code_up: str):
-    data = select_exceptions(server,database,username,password,Swift_code_up)
+    data = select_exceptions(server, database, username, password, Swift_code_up)
     df = pd.DataFrame(data)
-    
-    return df
+    # Convert DataFrame to a list of dictionaries for JSON serialization
+    return df.to_dict(orient='records')
+
 
 if __name__ == "__main__":
     import uvicorn
