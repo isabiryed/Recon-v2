@@ -223,21 +223,21 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
         # Raise a more specific error to FastAPI to handle
         raise HTTPException(status_code = 500, detail = str(e))  
 
-@app.get("/ReconStats")
+@app.get("/reconstats")
 async def getReconStats(Swift_code_up: str):
     data = recon_stats_req(server, database, username, password, Swift_code_up)
     df = pd.DataFrame(data)
     # Convert DataFrame to a list of dictionaries for JSON serialization
     return df.to_dict(orient='records')
 
-@app.get("/Exceptions")
+@app.get("/exceptions")
 async def getExceptions(Swift_code_up: str):
     data = select_exceptions(server, database, username, password, Swift_code_up)
     df = pd.DataFrame(data)
     # Convert DataFrame to a list of dictionaries for JSON serialization
     return df.to_dict(orient='records')
 
-@app.get("/ReconciledData")
+@app.get("/reconcileddata")
 async def get_reconciled_data():
     global reconciled_data
     if reconciled_data is not None:
@@ -246,7 +246,7 @@ async def get_reconciled_data():
     else:
         raise HTTPException(status_code = 404, detail="Reconciled data not found")
 
-@app.get("/UnreconciledData")
+@app.get("/unreconcileddata")
 async def get_unreconciled_data():
     global unreconciled_data
     if unreconciled_data is not None:
