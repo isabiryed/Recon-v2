@@ -99,12 +99,7 @@ def pre_processing(df):
 def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
     
     # Rename columns of DF1 to match DF2 for easier merging
-    DF1 = DF1.rename(columns={
-        'Date': 'DATE_TIME',
-        'ABC Reference': 'TRN_REF',
-        'Amount': 'AMOUNT',
-        'Transaction type': 'TXN_TYPE'
-    })
+    DF1 = DF1.rename(columns={'Date': 'DATE_TIME','ABC Reference': 'TRN_REF','Amount': 'AMOUNT','Transaction type': 'TXN_TYPE'})
     
     # Merge the dataframes on the relevant columns
     merged_df = DF1.merge(DF2, on=['DATE_TIME', 'TRN_REF', 'AMOUNT'], how='outer', indicator=True)
@@ -122,6 +117,8 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
 
     
 def main(path,Swift_code_up):
+
+    global reconciled_data, unreconciled_data  # Indicate these are global variables
     
     # Read the uploaded dataset from Excel
     uploaded_df = pd.read_excel(path , usecols = [0, 1, 2, 3], skiprows = 0)
@@ -233,6 +230,16 @@ async def getExceptions(Swift_code_up: str):
     # Convert DataFrame to a list of dictionaries for JSON serialization
     return df.to_dict(orient='records')
 
+# Assuming reconciled_data and unreconciled_data are global dataframes 
+# that have been computed and stored after calling reconcile_dataframes
+
+@app.get("/Reconciled")
+async def getReconciled() -> dict:
+    return reconciled_data.to_dict(orient='records')
+
+@app.get("/Unreconciled")
+async def getUnreconciled() -> dict:
+    return unreconciled_data.to_dict(orient='records')
 
 if __name__ == "__main__":
     import uvicorn
