@@ -16,6 +16,9 @@ from typing import List, Dict
 # Log errors and relevant information using the Python logging module
 import logging
 
+reconciled_data = None
+unreconciled_data = None
+
 app = FastAPI()
 
 origins = [
@@ -116,6 +119,9 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
 
     return merged_df, reconciled_data, unreconciled_data, exceptions
 
+def unserializable_floats(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.replace({math.nan: "NaN", math.inf: "Infinity", -math.inf: "-Infinity"})
+    return df
     
 def main(path,Swift_code_up):
 
@@ -231,18 +237,23 @@ async def getExceptions(Swift_code_up: str):
     # Convert DataFrame to a list of dictionaries for JSON serialization
     return df.to_dict(orient='records')
 
-# Assuming reconciled_data and unreconciled_data are global dataframes 
-# that have been computed and stored after calling reconcile_dataframes
+@app.get("/ReconciledData")
+async def get_reconciled_data():
+    global reconciled_data
+    if reconciled_data is not None:
+        reconciled_data_cleaned = unserializable_floats(reconciled_data)
+        return reconciled_data_cleaned.to_dict(orient='records')
+    else:
+        raise HTTPException(status_code = 404, detail="Reconciled data not found")
 
-# @app.get("/Reconciled", response_model=List[Dict])
-# async def get_reconciled(Swift_code_up: str):
-#     _, reconciled_data, _, _ = main(...)
-#     return reconciled_data.to_dict(orient='records')
-
-# @app.get("/Unreconciled", response_model=List[Dict])
-# async def get_unreconciled(Swift_code_up: str):
-#     _, _, unreconciled_data, _ = main(...)
-#     return unreconciled_data.to_dict(orient='records')
+@app.get("/UnreconciledData")
+async def get_unreconciled_data():
+    global unreconciled_data
+    if unreconciled_data is not None:
+        unreconciled_data_cleaned = unserializable_floats(unreconciled_data)
+        return unreconciled_data_cleaned.to_dict(orient='records')
+    else:
+        raise HTTPException(status_code = 404, detail="Unreconciled data not found")
 
 if __name__ == "__main__":
     import uvicorn
