@@ -11,6 +11,7 @@ import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
 from db_reconcile import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
+from typing import List, Dict
 
 # Log errors and relevant information using the Python logging module
 import logging
@@ -233,13 +234,15 @@ async def getExceptions(Swift_code_up: str):
 # Assuming reconciled_data and unreconciled_data are global dataframes 
 # that have been computed and stored after calling reconcile_dataframes
 
-@app.get("/Reconciled")
-async def getReconciled() -> dict:
-    return reconciled_data.to_dict(orient='records')
+# @app.get("/Reconciled", response_model=List[Dict])
+# async def get_reconciled(Swift_code_up: str):
+#     _, reconciled_data, _, _ = main(...)
+#     return reconciled_data.to_dict(orient='records')
 
-@app.get("/Unreconciled")
-async def getUnreconciled() -> dict:
-    return unreconciled_data.to_dict(orient='records')
+# @app.get("/Unreconciled", response_model=List[Dict])
+# async def get_unreconciled(Swift_code_up: str):
+#     _, _, unreconciled_data, _ = main(...)
+#     return unreconciled_data.to_dict(orient='records')
 
 if __name__ == "__main__":
     import uvicorn
