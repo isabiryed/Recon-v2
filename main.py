@@ -3,7 +3,7 @@ import re
 import math
 import pyodbc
 from openpyxl.utils.dataframe import dataframe_to_rows
-from db_connect_aws import execute_query
+from db_connect import execute_query
 from db_update import batch_update
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -31,10 +31,10 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-server = 'businessintelligence.cqo7jevz1qxm.eu-north-1.rds.amazonaws.com,1433'
+server = 'abcbusinessintelligence.database.windows.net'
 database = 'BusinessIntelligence'
 username = "isabiryed"
-password = "Tech247w247"
+password = "Vp85FRFXYf2KBr@"
 
 # Example usage for SELECT query:   
 # connection_string = execute_query(server, database, username, password)

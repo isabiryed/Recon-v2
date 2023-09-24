@@ -33,10 +33,10 @@ def execute_query(server_name, database_name, username, password, query, query_t
 
 if __name__ == "__main__":
     # Example usage for SELECT query:
-    server = 'businessintelligence.cqo7jevz1qxm.eu-north-1.rds.amazonaws.com,1433'
+    server = 'abcbusinessintelligence.database.windows.net'
     database = 'BusinessIntelligence'
     username = "isabiryed"
-    password = "Tech247w247"
+    password = "Vp85FRFXYf2KBr@"
 
     # Test the connection
     test_query = "SELECT TOP 2 DATE_TIME, TRN_REF, TXN_TYPE FROM Transactions"  # A simple query to test the connection
