@@ -152,6 +152,7 @@ def main(path,Swift_code_up):
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
             AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
             AND REQUEST_TYPE NOT IN ('1420','1421')
+            AND TXN_TYPE NOT IN ('ACI','AGENTFLOATINQ','BI','MINI')
     """
 
     # Execute the SQL query
