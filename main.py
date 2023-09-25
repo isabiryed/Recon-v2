@@ -119,7 +119,7 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
     unreconciled_data = merged_df[merged_df['Recon Status'] == 'Unreconciled']
     exceptions = merged_df[(merged_df['Recon Status'] == 'Reconciled') & (merged_df['RESPONSE_CODE'] != '0')]
 
-    return merged_df, reconciled_data, unreconciled_data, exceptions,succunreconciled_data
+    return merged_df, reconciled_data, succunreconciled_data, exceptions
 
 def unserializable_floats(df: pd.DataFrame) -> pd.DataFrame:
     df = df.replace({math.nan: "NaN", math.inf: "Infinity", -math.inf: "-Infinity"})
