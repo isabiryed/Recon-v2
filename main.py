@@ -160,7 +160,8 @@ def main(path,Swift_code_up):
     
     if datadump is not None:
         datadump = backup_refs(datadump, 'TRN_REF')
-        requestedRows = len(datadump)
+        requestedRows = len(datadump[datadump['RESPONSE_CODE'] == '0'])
+
         # Clean and format columns in the datadump        
         # Apply the data_pre_processing function to the datadump dataframe
         db_preprocessed = pre_processing(datadump)
