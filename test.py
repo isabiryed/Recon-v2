@@ -3,7 +3,7 @@ import re
 import math
 import pyodbc
 from openpyxl.utils.dataframe import dataframe_to_rows
-from db_connect_aws import execute_query
+from db_connect import execute_query
 from db_update import batch_update
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -17,10 +17,10 @@ Swift_code_up = 130447
 import logging
 
 
-server = 'businessintelligence.cqo7jevz1qxm.eu-north-1.rds.amazonaws.com,1433'
+server = 'abcbusinessintelligence.database.windows.net'
 database = 'BusinessIntelligence'
 username = "isabiryed"
-password = "Tech247w247"
+password = "Vp85FRFXYf2KBr@"
 
 # Example usage for SELECT query:   
 # connection_string = execute_query(server, database, username, password)
@@ -34,10 +34,9 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
     # Rename columns of DF1 to match DF2 for easier merging
     DF1 = DF1.rename(columns={
         'Date': 'DATE_TIME',
-        'Original_ABC Reference': 'Original_TRN_REF',
         'ABC Reference': 'TRN_REF',
-        'Amount': 'AMOUNT',
-        'Transaction type': 'TXN_TYPE'
+        'Amount': 'AMOUNT'
+        
     })
     
     # Merge the dataframes on the relevant columns
@@ -45,14 +44,18 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
     
     # Create a new column 'Recon Status'
     merged_df['Recon Status'] = 'Unreconciled'
+    
+    # Update the 'Recon Status' column based on conditions
+    merged_df.loc[(merged_df['Recon Status'] == 'Unreconciled') & (merged_df['RESPONSE_CODE'] == '0') | (merged_df['Response_code'] == '0'), 'Recon Status'] = 'succunreconciled'
     merged_df.loc[merged_df['_merge'] == 'both', 'Recon Status'] = 'Reconciled'
 
     # Separate the data into three different dataframes based on the reconciliation status
     reconciled_data = merged_df[merged_df['Recon Status'] == 'Reconciled']
+    succunreconciled_data = merged_df[merged_df['Recon Status'] == 'succunreconciled']
     unreconciled_data = merged_df[merged_df['Recon Status'] == 'Unreconciled']
     exceptions = merged_df[(merged_df['Recon Status'] == 'Reconciled') & (merged_df['RESPONSE_CODE'] != '0')]
 
-    return merged_df, reconciled_data, unreconciled_data, exceptions
+    return merged_df, reconciled_data,succunreconciled_data,unreconciled_data, exceptions
 
 def backup_refs(df, reference_column):
     # Backup the original reference column
@@ -123,10 +126,13 @@ min_date, max_date = date_range(uploaded_df, 'Date')
 date_range_str = f"{min_date},{max_date}"
 
 uploaded_df = backup_refs(uploaded_df, 'ABC Reference')
+
+uploaded_df['Response_code'] = '0'
 UploadedRows = len(uploaded_df)
 # Clean and format columns in the uploaded dataset
 # Apply the data_pre_processing function to the uploaded_df dataframe
 up_preprocessing_result = pre_processing(uploaded_df)
+
      
 # Define the SQL query
 query = f"""
@@ -135,6 +141,9 @@ query = f"""
         FROM Transactions
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
             AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
+            AND REQUEST_TYPE NOT IN ('1420','1421')
+            AND TXN_TYPE NOT IN ('ACI','AGENTFLOATINQ','BI','MINI')
+
     """
     
     # Execute the SQL query
@@ -148,12 +157,13 @@ if datadump is not None:
         db_preprocessing_result = pre_processing(datadump)
                
         # Merge the dataframes
-        merged, reconciled_data, unreconciled_data, exceptions = process_reconciliation(uploaded_df,datadump)
+        merged_df, reconciled_data,succunreconciled_data,unreconciled_data, exceptions = process_reconciliation(uploaded_df,datadump)
         # merged_df = reconcile_dataframes(uploaded_df, datadump)
-        #merged_df = datadump.merge(uploaded_df, left_on='concat_db', right_on='concat_up', how='outer')
-        ## Use the function to classify and filter rows
+        # merged_df = datadump.merge(uploaded_df, left_on='concat_db', right_on='concat_up', how='outer')
+        # Use the function to classify and filter rows
         # reconciled_data, unreconciled_data, exceptions = process_reconciliation(merged_df, columns_to_select)        
-        print(unreconciled_data.head(20))
+        print(merged_df.head(20))
+        # print(datadump.head(20))
 #         # # The batch_update, feedback on update functions!
 #         # dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
 #         # feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,

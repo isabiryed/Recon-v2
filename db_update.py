@@ -1,6 +1,6 @@
 import pandas as pd
 import pyodbc
-from db_connect_aws import execute_query
+from db_connect import execute_query
 
 def batch_update(df, Swift_code_up, min_date, max_date, server, database, username, password, execute_query_func):
     # Filter the DataFrame to get the rows that need updating

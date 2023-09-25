@@ -1,4 +1,4 @@
-from db_connect_aws import execute_query
+from db_connect import execute_query
 
 
 def insert_recon_stats(bankid,userid,reconciledRows, unreconciledRows, exceptionsRows, feedback, 

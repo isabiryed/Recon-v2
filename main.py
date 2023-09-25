@@ -17,7 +17,7 @@ from typing import List, Dict
 import logging
 
 reconciled_data = None
-unreconciled_data = None
+succunreconciled_data = None
 
 app = FastAPI()
 
@@ -110,14 +110,16 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
     
     # Create a new column 'Recon Status'
     merged_df['Recon Status'] = 'Unreconciled'
+    merged_df.loc[(merged_df['Recon Status'] == 'Unreconciled') & (merged_df['RESPONSE_CODE'] == '0') | (merged_df['Response_code'] == '0'), 'Recon Status'] = 'succunreconciled'
     merged_df.loc[merged_df['_merge'] == 'both', 'Recon Status'] = 'Reconciled'
 
     # Separate the data into three different dataframes based on the reconciliation status
     reconciled_data = merged_df[merged_df['Recon Status'] == 'Reconciled']
+    succunreconciled_data = merged_df[merged_df['Recon Status'] == 'succunreconciled']
     unreconciled_data = merged_df[merged_df['Recon Status'] == 'Unreconciled']
     exceptions = merged_df[(merged_df['Recon Status'] == 'Reconciled') & (merged_df['RESPONSE_CODE'] != '0')]
 
-    return merged_df, reconciled_data, unreconciled_data, exceptions
+    return merged_df, reconciled_data, unreconciled_data, exceptions,succunreconciled_data
 
 def unserializable_floats(df: pd.DataFrame) -> pd.DataFrame:
     df = df.replace({math.nan: "NaN", math.inf: "Infinity", -math.inf: "-Infinity"})
@@ -125,7 +127,7 @@ def unserializable_floats(df: pd.DataFrame) -> pd.DataFrame:
     
 def main(path,Swift_code_up):
 
-    global reconciled_data, unreconciled_data  # Indicate these are global variables
+    global reconciled_data, succunreconciled_data  # Indicate these are global variables
     
     # Read the uploaded dataset from Excel
     uploaded_df = pd.read_excel(path , usecols = [0, 1, 2, 3], skiprows = 0)
@@ -136,6 +138,7 @@ def main(path,Swift_code_up):
     date_range_str = f"{min_date},{max_date}"
 
     uploaded_df = backup_refs(uploaded_df, 'ABC Reference')
+    uploaded_df['Response_code'] = '0'
     UploadedRows = len(uploaded_df)
     # Clean and format columns in the uploaded dataset
     # Apply the data_pre_processing function to the uploaded_df dataframe
@@ -148,6 +151,7 @@ def main(path,Swift_code_up):
         FROM Transactions
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
             AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
+            AND REQUEST_TYPE NOT IN ('1420','1421')
     """
 
     # Execute the SQL query
@@ -162,14 +166,14 @@ def main(path,Swift_code_up):
         
         # Now, you can use strftime to format the 'DATE_TIME' column if needed        
                 
-        merged_df, reconciled_data, unreconciled_data, exceptions = process_reconciliation(uploaded_df_processed,db_preprocessed)  
+        merged_df, reconciled_data,succunreconciled_data, exceptions = process_reconciliation(uploaded_df_processed,db_preprocessed)  
                 
         # The batch_update, feedback on update functions!
         dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
         feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,
                                                     username, password, execute_query)  
         
-        insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(unreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
+        insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(succunreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
            date_range_str,server,database,username,password) 
 
         logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
@@ -181,7 +185,7 @@ def main(path,Swift_code_up):
         except Exception as e:
             logging.error(f"Error: {str(e)}")
 
-        return merged_df,reconciled_data,unreconciled_data,exceptions,feedback,requestedRows,UploadedRows,date_range_str
+        return merged_df,reconciled_data,succunreconciled_data,exceptions,feedback,requestedRows,UploadedRows,date_range_str
 
 @app.post("/reconcile")
 async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
@@ -194,9 +198,9 @@ async def reconcile(file: UploadFile = File(...), swift_code: str = Form(...)):
     
     try:
         # Call the main function with the path of the saved file and the swift code
-        merged_df, reconciled_data, unreconciled_data, exceptions,feedback,requestedRows,UploadedRows,date_range_str = main(temp_file_path, swift_code)
+        merged_df, reconciled_data, succunreconciled_data, exceptions,feedback,requestedRows,UploadedRows,date_range_str = main(temp_file_path, swift_code)
         reconciledRows = len(reconciled_data)
-        unreconciledRows = len(unreconciled_data)
+        unreconciledRows = len(succunreconciled_data)
         exceptionsRows = len(exceptions)
         # Clean up: remove the temporary file after processing
         os.remove(temp_file_path)
@@ -248,9 +252,9 @@ async def get_reconciled_data():
 
 @app.get("/unreconcileddata")
 async def get_unreconciled_data():
-    global unreconciled_data
-    if unreconciled_data is not None:
-        unreconciled_data_cleaned = unserializable_floats(unreconciled_data)
+    global succunreconciled_data
+    if succunreconciled_data is not None:
+        unreconciled_data_cleaned = unserializable_floats(succunreconciled_data)
         return unreconciled_data_cleaned.to_dict(orient='records')
     else:
         raise HTTPException(status_code = 404, detail="Unreconciled data not found")
