@@ -6,3 +6,13 @@ ERROR:root:Error: can only concatenate str (not "numpy.int64") to str
 ERROR:root:Error: can only concatenate str (not "numpy.int64") to str
 ERROR:root:Error: name 'feedback' is not defined
 ERROR:root:Error: name 'feedback' is not defined
+2023-09-26 22:17:41,020 - ERROR - An error occurred at index 1: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+2023-09-26 22:17:41,644 - ERROR - An error occurred at index 7: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+2023-09-26 22:17:42,286 - ERROR - An error occurred at index 10: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+2023-09-26 22:17:43,419 - ERROR - An error occurred at index 11: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+2023-09-27 00:29:53,851 - ERROR - The df DataFrame is empty.
+2023-09-27 00:36:10,225 - ERROR - The df DataFrame is empty.
+2023-09-27 00:37:43,875 - ERROR - The df DataFrame is empty.
+2023-09-27 00:43:57,667 - ERROR - The df DataFrame is empty.
+2023-09-27 00:44:28,346 - ERROR - The df DataFrame is empty.
+2023-09-27 00:50:32,270 - ERROR - The df DataFrame is empty.
