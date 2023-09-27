@@ -9,9 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
-from db_reconcile import insert_recon_stats,recon_stats_req
+from db_recon_stats import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
 from typing import List, Dict
+from db_recon_data import update_reconciliation
 
 # Log errors and relevant information using the Python logging module
 import logging
@@ -165,7 +166,7 @@ def main(path,Swift_code_up):
         
     # Define the SQL query
     query = f"""
-        SELECT DISTINCT DATE_TIME, TRN_REF, TXN_TYPE, ISSUER_CODE, ACQUIRER_CODE,
+        SELECT DISTINCT DATE_TIME, BATCH,TRN_REF, TXN_TYPE, ISSUER_CODE, ACQUIRER_CODE,
                AMOUNT, RESPONSE_CODE
         FROM Transactions
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
@@ -188,17 +189,6 @@ def main(path,Swift_code_up):
         # Now, you can use strftime to format the 'DATE_TIME' column if needed        
                 
         merged_df, reconciled_data,succunreconciled_data, exceptions = process_reconciliation(uploaded_df_processed,db_preprocessed)  
-<<<<<<< Updated upstream
-                
-        # The batch_update, feedback on update functions!
-        dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
-        feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,
-                                                    username, password, execute_query)  
-        
-        insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(succunreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
-           date_range_str,server,database,username,password) 
-
-=======
         succunreconciled_data = use_cols (succunreconciled_data) 
         reconciled_data = use_cols (reconciled_data) 
 
@@ -207,7 +197,6 @@ def main(path,Swift_code_up):
         insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(succunreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
            date_range_str,server,database,username,password) 
         
->>>>>>> Stashed changes
         logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
         try:
             
