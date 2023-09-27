@@ -4,14 +4,20 @@ import math
 import pyodbc
 from openpyxl.utils.dataframe import dataframe_to_rows
 from db_connect import execute_query
-from db_update import batch_update
+from db_recon_data import update_reconciliation
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
 from db_reconcile import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
+<<<<<<< Updated upstream
 Swift_code_up = 130447
+=======
+from typing import List, Dict
+from db_update import batch_update
+
+>>>>>>> Stashed changes
 
 # Log errors and relevant information using the Python logging module
 import logging
@@ -27,6 +33,7 @@ password = "Vp85FRFXYf2KBr@"
 queryTst = "SELECT 1"
 connection_string = execute_query(server, database, username, password,queryTst)
 
+<<<<<<< Updated upstream
 
 
 def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
@@ -56,6 +63,26 @@ def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFram
     exceptions = merged_df[(merged_df['Recon Status'] == 'Reconciled') & (merged_df['RESPONSE_CODE'] != '0')]
 
     return merged_df, reconciled_data,succunreconciled_data,unreconciled_data, exceptions
+=======
+def use_cols(df):
+    """
+    Renames the 'Original_ABC Reference' column to 'Reference' and selects specific columns.
+
+    :param df: DataFrame to be processed.
+    :return: New DataFrame with selected and renamed columns.
+    """
+    df = df.rename(columns={'TXN_TYPE_y': 'TXN_TYPE', 'Original_TRN_REF': 'TRN_REF2'})
+
+    # Convert 'DATE_TIME' to datetime
+    df['DATE_TIME'] = pd.to_datetime(df['DATE_TIME'].astype(str), format='%Y%m%d')
+
+    # Select only the desired columns
+    selected_columns = ['DATE_TIME', 'AMOUNT', 'TRN_REF2', 'BATCH', 'TXN_TYPE', 
+                        'ISSUER_CODE', 'ACQUIRER_CODE', 'RESPONSE_CODE', '_merge', 'Recon Status']
+    df_selected = df[selected_columns]
+    
+    return df_selected
+>>>>>>> Stashed changes
 
 def backup_refs(df, reference_column):
     # Backup the original reference column
@@ -154,6 +181,7 @@ if datadump is not None:
         requestedRows = len(datadump)
         # Clean and format columns in the datadump        
         # Apply the data_pre_processing function to the datadump dataframe
+<<<<<<< Updated upstream
         db_preprocessing_result = pre_processing(datadump)
                
         # Merge the dataframes
@@ -174,12 +202,58 @@ if datadump is not None:
 
 #         logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
 #         try:
+=======
+        db_preprocessed = pre_processing(datadump)
+        
+        # Now, you can use strftime to format the 'DATE_TIME' column if needed        
+                
+        merged_df, reconciled_data,succunreconciled_data, exceptions = process_reconciliation(uploaded_df_processed,db_preprocessed)  
+        # merged_df = use_cols (merged_df) 
+        succunreconciled_data = use_cols (succunreconciled_data) 
+        reconciled_data = use_cols (reconciled_data) 
+        
+        
+        # # The batch_update, feedback on update functions!
+        # # dbupdate = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database, username, password, execute_query)
+        # feedback, post_update_count = batch_update(reconciled_data, Swift_code_up, min_date, max_date, server, database,
+        #                                            username, password, execute_query)  
+        
+        feedback  = update_reconciliation(reconciled_data,server, database, username, password,Swift_code_up)
+
+        insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(succunreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
+           date_range_str,server,database,username,password)        
+        
+        
+        # print(reconciled_data.head(10))
+
+        # testres = update_reconciliation(reconciled_data, server, database, username, password,Swift_code_up)
+
+        # logging.basicConfig(filename = 'reconciliation.log', level = logging.ERROR)
+        # try:
+>>>>>>> Stashed changes
             
 #             print('Thank you, your reconciliation is complete. ' + feedback)
             
+<<<<<<< Updated upstream
 #             pass
 #         except Exception as e:
 #             logging.error(f"Error: {str(e)}")
+=======
+        #     pass
+        # except Exception as e:
+        #     logging.error(f"Error: {str(e)}")
+
+        # return merged_df,reconciled_data,succunreconciled_data,exceptions,feedback,requestedRows,UploadedRows,date_range_str
+        return reconciled_data
+        
+
+
+path = rf'C:\Users\dataanalyst\Desktop\Python projects\datasets\testupload_.xlsx'
+
+
+Swift_code_up = '163747'
+main(path,Swift_code_up)
+>>>>>>> Stashed changes
 
 
 

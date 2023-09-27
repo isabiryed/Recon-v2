@@ -1,4 +1,9 @@
 from db_connect import execute_query
+<<<<<<< Updated upstream:db_reconcile.py
+=======
+from datetime import datetime
+current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+>>>>>>> Stashed changes:db_recon_stats.py
 
 
 def insert_recon_stats(bankid,userid,reconciledRows, unreconciledRows, exceptionsRows, feedback, 
