@@ -12,7 +12,6 @@ from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
 from db_recon_stats import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
 from typing import List, Dict
-from db_update import batch_update
 
 
 # Log errors and relevant information using the Python logging module
@@ -224,7 +223,7 @@ def main(path,Swift_code_up):
         
 
 
-path = rf'C:\Users\dataanalyst\Desktop\Python projects\datasets\testupload_.xlsx'
+path = rf'C:\Users\ISABIRYEDICKSON\Desktop\Python projects\datasets\Upload Template.xlsx'
 
 
 Swift_code_up = '163747'

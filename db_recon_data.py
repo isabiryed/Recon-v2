@@ -27,50 +27,48 @@ def update_reconciliation(df, server, database, username, password, swift_code):
             logging.warning(f"Empty Trn Reference for {index}.")
             continue
 
-        acq_flg = 1 if acquirer_code == swift_code else 'NULL'
-        iss_flg = 1 if issuer_code == swift_code else 'NULL'
-        acq_flg_date = 'GETDATE()' if acquirer_code == swift_code else 'NULL'
-        iss_flg_date = 'GETDATE()' if issuer_code == swift_code else 'NULL'
-
         select_query = f"SELECT * FROM reconciliation WHERE TRN_REF = '{trn_ref}'"
         existing_data = execute_query(server, database, username, password, select_query, query_type="SELECT")
 
+        # Update Query
+        update_query = f"""
+            UPDATE reconciliation
+        SET
+            ISS_FLG = CASE WHEN (ISS_FLG IS NULL OR ISS_FLG = 0 OR ISS_FLG != 1)  AND ISSUER_CODE = '{swift_code}' THEN 1 ELSE ISS_FLG END,
+            ACQ_FLG = CASE WHEN (ACQ_FLG IS NULL OR ACQ_FLG = 0 OR ACQ_FLG != 1) AND ACQUIRER_CODE = '{swift_code}' THEN 1 ELSE ACQ_FLG END,
+            ISS_FLG_DATE = CASE WHEN (ISS_FLG IS NULL OR ISS_FLG = 0 OR ISS_FLG != 1) AND ISSUER_CODE = '{swift_code}' THEN GETDATE() ELSE ISS_FLG_DATE END,
+            ACQ_FLG_DATE = CASE WHEN (ACQ_FLG IS NULL OR ACQ_FLG = 0 OR ACQ_FLG != 1) AND ACQUIRER_CODE = '{swift_code}' THEN GETDATE() ELSE ACQ_FLG_DATE END
+            WHERE TRN_REF = '{trn_ref}'                
+        """
+
         if existing_data.empty:
+            # If not existing, insert and then update
             insert_query = f"""
                 INSERT INTO reconciliation 
-                    (DATE_TIME, TRAN_DATE, TRN_REF, BATCH, ACQUIRER_CODE, ISSUER_CODE, ACQ_FLG, ISS_FLG, ACQ_FLG_DATE, ISS_FLG_DATE)
+                    (DATE_TIME, TRAN_DATE, TRN_REF, BATCH, ACQUIRER_CODE, ISSUER_CODE)
                 VALUES 
                     (GETDATE(),
                      '{date_time}',
                      '{trn_ref}', 
                      '{batch}', 
                      '{acquirer_code}',
-                     '{issuer_code}', 
-                      {acq_flg}, 
-                      {iss_flg}, 
-                      {acq_flg_date}, 
-                      {iss_flg_date})
+                     '{issuer_code}')
             """
             try:
-                execute_query(server, database, username, password, insert_query, query_type = "INSERT")
+                execute_query(server, database, username, password, insert_query, query_type="INSERT")
                 insert_count += 1
+                # Immediate update after insert
+                execute_query(server, database, username, password, update_query, query_type="UPDATE")
+                # update_count += 1
             except pyodbc.Error as err:
-                logging.error(f"Error inserting PK '{trn_ref}': {err}")
+                logging.error(f"Error processing PK '{trn_ref}': {err}")
         else:
-            update_query = f"""
-                UPDATE reconciliation
-            SET
-                ISS_FLG = CASE WHEN ISS_FLG != 1 AND ISSUER_CODE = '{swift_code}' THEN 1 ELSE ISS_FLG END,
-                ACQ_FLG = CASE WHEN ACQ_FLG != 1 AND ACQUIRER_CODE = '{swift_code}' THEN 1 ELSE ACQ_FLG END,
-                ISS_FLG_DATE = CASE WHEN (ISS_FLG != 1 AND ISSUER_CODE = '{swift_code}') THEN GETDATE() ELSE ISS_FLG_DATE END,
-                ACQ_FLG_DATE = CASE WHEN (ACQ_FLG != 1 AND ACQUIRER_CODE = '{swift_code}') THEN GETDATE() ELSE ACQ_FLG_DATE END
-                WHERE TRN_REF = '{trn_ref}'                
-            """
+            # If already existing, just update
             try:
-                execute_query(server, database, username, password, update_query, query_type = "UPDATE")
+                execute_query(server, database, username, password, update_query, query_type="UPDATE")
                 update_count += 1
             except pyodbc.Error as err:
-                logging.error(f"Error updating TRN_REF '{trn_ref}': {err}")
+                logging.error(f"Error updating PK '{trn_ref}': {err}")
 
     if update_count == 0:
         logging.info("No new records were updated.")
