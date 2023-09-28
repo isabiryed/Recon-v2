@@ -1,5 +1,5 @@
 import pandas as pd
-import re
+import logging
 
 from db_settle_recon import select_setle_file
 
@@ -93,21 +93,29 @@ def convert_batch_to_int(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-def main(batch):
-    # Execute the SQL query
-    datadump = select_setle_file(server, database, username, password, batch)
-     
-    # Check if datadump is not None
-    if datadump is not None and not datadump.empty:         
-        datadump = convert_batch_to_int(datadump)
-        datadump = pre_processing_amt(datadump)
-        datadump = add_payer_beneficiary(datadump)
-        combined_result = combine_transactions(datadump, acquirer_col='Payer', issuer_col='Beneficiary', amount_col='AMOUNT', type_col='TXN_TYPE')
-        # print(combined_result)
-    else:
-        print("No records for processing found.")
+def settle(batch):
 
-# # Call the main function
-main(batch)
+    try:
 
+        logging.basicConfig(filename='settlement.log', level=logging.ERROR)
 
+        # Execute the SQL query
+        datadump = select_setle_file(server, database, username, password, batch)
+        
+        # Check if datadump is not None
+        if datadump is not None and not datadump.empty:         
+            datadump = convert_batch_to_int(datadump)
+            datadump = pre_processing_amt(datadump)
+            datadump = add_payer_beneficiary(datadump)            
+                  
+        else:
+            logging.warning("No records for processing found.")
+            return None  # Return None to indicate that no records were found
+
+        setlement_result = combine_transactions(datadump, acquirer_col='Payer', issuer_col='Beneficiary', amount_col='AMOUNT', type_col='TXN_TYPE')
+
+    except Exception as e:
+        logging.error(f"Error: {str(e)}")
+        return None  # Return None to indicate that an error occurred
+
+    return setlement_result

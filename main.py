@@ -4,8 +4,11 @@ import math
 import pyodbc
 from openpyxl.utils.dataframe import dataframe_to_rows
 from db_connect import execute_query
-from db_update import batch_update
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from zipfile import ZipFile
+from io import BytesIO
 import json
 import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
@@ -16,6 +19,9 @@ from db_recon_data import update_reconciliation
 
 # Log errors and relevant information using the Python logging module
 import logging
+
+from setle_sabs import pre_processing, setleSabs
+from setlement_ import settle
 
 reconciled_data = None
 succunreconciled_data = None
@@ -71,54 +77,6 @@ def date_range(dataframe, date_column):
     min_date = dataframe[date_column].min().strftime('%Y-%m-%d')
     max_date = dataframe[date_column].max().strftime('%Y-%m-%d')
     return min_date, max_date
-
-def pre_processing(df):
-    # Helper functions
-    def clean_amount(value):
-        try:
-            # Convert the value to a float and then to an integer to remove decimals
-            return str(int(float(value)))
-        except:
-            return '0'  # Default to '0' if conversion fails
-    
-    def remo_spec_x(value):
-        cleaned_value = re.sub(r'[^0-9a-zA-Z]', '', str(value))
-        if cleaned_value == '':
-            return '0'
-        return cleaned_value
-    
-    def pad_strings_with_zeros(input_str):
-        if len(input_str) < 12:
-            num_zeros = 12 - len(input_str)
-            padded_str = '0' * num_zeros + input_str
-            return padded_str
-        else:
-            return input_str[:12]
-
-    def clean_date(value):
-        try:
-            # Convert to datetime to ensure it's in datetime format
-            date_value = pd.to_datetime(value).date()
-            return str(date_value).replace("-", "")
-        except:
-            return value  # Return the original value if conversion fails
-
-    # Cleaning logic
-    for column in df.columns:
-        # Cleaning for date columns
-        if column in ['Date', 'DATE_TIME']:
-            df[column] = df[column].apply(clean_date)
-        # Cleaning for amount columns
-        elif column in ['Amount', 'AMOUNT']:
-            df[column] = df[column].apply(clean_amount)
-        else:
-            df[column] = df[column].apply(remo_spec_x)  # Clean without converting to string
-        
-        # Padding for specific columns
-        if column in ['ABC Reference', 'TRN_REF']:
-            df[column] = df[column].apply(pad_strings_with_zeros)
-    
-    return df
 
 def process_reconciliation(DF1: pd.DataFrame, DF2: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
     
@@ -279,6 +237,68 @@ async def get_unreconciled_data():
         return unreconciled_data_cleaned.to_dict(orient='records')
     else:
         raise HTTPException(status_code = 404, detail="Unreconciled data not found")
+
+@app.post("/sabsreconcile/csv_files/")
+async def sabsreconcile_csv_files(file: UploadFile = File(...), batch_number: str = Form(...)):
+    
+    temp_file_path = "temp_file.xlsx"
+    with open(temp_file_path, "wb") as buffer:
+        buffer.write(file.file.read())
+
+    try:
+        # Assume setleSabs returns dataframes as one of its outputs
+        _, matched_setle, _, unmatched_setlesabs = setleSabs(temp_file_path, batch_number)
+        os.remove(temp_file_path)
+
+        matched_csv = matched_setle.to_csv(index=False)
+        unmatched_csv = unmatched_setlesabs.to_csv(index=False)
+        
+        # Create a zip file in memory
+        memory_file = BytesIO()
+        with ZipFile(memory_file, 'w') as zf:
+            zf.writestr('matched_setle.csv', matched_csv)
+            zf.writestr('unmatched_setlesabs.csv', unmatched_csv)
+
+        memory_file.seek(0)
+        
+        return StreamingResponse(memory_file, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=Settlement_recon_files.zip"})
+
+    except Exception as e:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/settlementcsv_files/")
+async def settlement_csv_files(batch_number: str = Form(...)):
+
+    try:
+        # Assume the settle function is defined and available here
+        setlement_result = settle(batch_number)
+        
+        # Handle case where no records were found or an error occurred in settle
+        if setlement_result is None or setlement_result.empty:
+            raise HTTPException(status_code= 400, detail="No records for processing found or an error occurred.")
+
+        # Convert the DataFrame to CSV
+        setlement_csv = setlement_result.to_csv(index=False)
+                
+        # Create a zip file in memory
+        memory_file = BytesIO()
+        with ZipFile(memory_file, 'w') as zf:
+            zf.writestr('setlement_result.csv', setlement_csv)
+            
+        memory_file.seek(0)
+        
+        # Return the zip file as a response
+        return StreamingResponse(
+            memory_file, 
+            media_type="application/zip", 
+            headers={"Content-Disposition": "attachment; filename=Settlement_.zip"}
+        )
+
+    except Exception as e:
+        # Handle other unexpected errors
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
