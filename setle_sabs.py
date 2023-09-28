@@ -17,8 +17,8 @@ database = 'BusinessIntelligence'
 username = "isabiryed"
 password = "Vp85FRFXYf2KBr@"
 
-batch = 2349
-path = rf'\Users\ISABIRYEDICKSON\Desktop\Python projects\datasets\Batches\Batch {batch}.xlsx'
+# batch = 2349
+# path = rf'\Users\ISABIRYEDICKSON\Desktop\Python projects\datasets\Batches\Batch {batch}.xlsx'
 
 def unserializable_floats(df: pd.DataFrame) -> pd.DataFrame:
     df = df.replace({math.nan: "NaN", math.inf: "Infinity", -math.inf: "-Infinity"})
