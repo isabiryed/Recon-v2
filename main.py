@@ -14,6 +14,7 @@ import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
 from db_recon_stats import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
+from db_reversals import select_reversals
 from typing import List, Dict
 from db_recon_data import update_reconciliation
 
@@ -130,6 +131,7 @@ def main(path,Swift_code_up):
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
             AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
             AND REQUEST_TYPE NOT IN ('1420','1421')
+            AND (A.AMOUNT > 0 OR A.AMOUNT < 0)
             AND TXN_TYPE NOT IN ('ACI','AGENTFLOATINQ','BI','MINI')
     """
 
@@ -216,6 +218,13 @@ async def getReconStats(Swift_code_up: str):
 @app.get("/exceptions")
 async def getExceptions(Swift_code_up: str):
     data = select_exceptions(server, database, username, password, Swift_code_up)
+    df = pd.DataFrame(data)
+    # Convert DataFrame to a list of dictionaries for JSON serialization
+    return df.to_dict(orient='records')
+
+@app.get("/reversals")
+async def getreversals(Swift_code_up: str):
+    data = select_reversals(server, database, username, password, Swift_code_up)
     df = pd.DataFrame(data)
     # Convert DataFrame to a list of dictionaries for JSON serialization
     return df.to_dict(orient='records')
