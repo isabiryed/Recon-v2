@@ -12,6 +12,7 @@ from io import BytesIO
 import json
 import os
 from fastapi import FastAPI, Query, UploadFile, Form,File,HTTPException
+from db_excep_data import update_exception_flag
 from db_recon_stats import insert_recon_stats,recon_stats_req
 from db_exceptions import select_exceptions
 from db_reversals import select_reversals
@@ -131,7 +132,7 @@ def main(path,Swift_code_up):
         WHERE (ISSUER_CODE = '{Swift_code_up}' OR ACQUIRER_CODE = '{Swift_code_up}')
             AND CONVERT(DATE, DATE_TIME) BETWEEN '{min_date}' AND '{max_date}'
             AND REQUEST_TYPE NOT IN ('1420','1421')
-            AND (A.AMOUNT > 0 OR A.AMOUNT < 0)
+            AND (AMOUNT > 0 OR AMOUNT < 0)
             AND TXN_TYPE NOT IN ('ACI','AGENTFLOATINQ','BI','MINI')
     """
 
@@ -152,8 +153,16 @@ def main(path,Swift_code_up):
         succunreconciled_data = use_cols (succunreconciled_data) 
         reconciled_data = use_cols (reconciled_data) 
 
-        feedback  = update_reconciliation(reconciled_data,server, database, username, password,Swift_code_up)      
-         
+        feedback = update_reconciliation(reconciled_data, server, database, username, password, Swift_code_up)
+
+        # Initialize exceptions_feedback with a default value
+        exceptions_feedback = None 
+        # Check if exceptions DataFrame is not empty, if not empty then update exception flag
+        if not exceptions.empty:
+            exceptions_feedback = update_exception_flag(exceptions, server, database, username, password)
+        else:
+            exceptions_feedback = "No exceptions to update."
+        
         insert_recon_stats(Swift_code_up,Swift_code_up,len(reconciled_data),len(succunreconciled_data),len(exceptions),feedback,(requestedRows),(UploadedRows),
            date_range_str,server,database,username,password) 
         
